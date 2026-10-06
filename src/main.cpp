@@ -38,6 +38,8 @@ int runCheck(const QString &configPath)
         out << "transcription: " << toString(cfg.transcription.mode) << "\n";
         out << "batch endpoint: " << makeHttpEndpoint(cfg.transcription.baseUrl, cfg.transcription.batch.path).toString() << "\n";
         out << "realtime endpoint: " << makeWebSocketEndpoint(cfg.transcription.baseUrl, cfg.transcription.realtime.path).toString() << "\n";
+        out << "realtime live insert: " << (cfg.transcription.realtime.liveInsert ? "enabled" : "disabled")
+            << " (flush " << cfg.transcription.realtime.liveFlushMs << " ms)\n";
         out << "api key: " << (cfg.transcription.resolvedApiKey().isEmpty() ? "MISSING" : "present") << "\n";
 
         const QString ydotool = TextOutput::ydotoolExecutable();

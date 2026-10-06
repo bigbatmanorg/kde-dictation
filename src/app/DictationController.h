@@ -38,6 +38,7 @@ public slots:
 private:
     void startBatchFallback(const QString &reason);
     void startBatch(const QByteArray &pcm);
+    void handlePartialTranscript(const QString &text);
     void handleFinalTranscript(const QString &text);
     void handleRealtimeError(const QString &message);
     void fail(const QString &message);
@@ -54,6 +55,7 @@ private:
     TrayController *tray_;
     QByteArray capturedPcm_;
     bool realtimeFailed_ = false;
+    QString streamedText_;
     QTimer maxRecordingTimer_;
 };
 

@@ -31,9 +31,12 @@ transcription:
   realtime:
     fallback_to_batch: true
     finalization_timeout_ms: 2500
+    live_insert: true
+    live_flush_ms: 90
 output:
   method: clipboard_paste
   paste_shortcut: ctrl+v
+  live_paste_delay_ms: 35
 )YAML");
         f.close();
 
@@ -44,6 +47,9 @@ output:
         QCOMPARE(cfg.transcription.resolvedApiKey(), QStringLiteral("from-env"));
         QCOMPARE(cfg.transcription.realtime.finalizationTimeoutMs, 2500);
         QVERIFY(cfg.transcription.realtime.fallbackToBatch);
+        QVERIFY(cfg.transcription.realtime.liveInsert);
+        QCOMPARE(cfg.transcription.realtime.liveFlushMs, 90);
+        QCOMPARE(cfg.output.livePasteDelayMs, 35);
         qunsetenv("TEST_KDICT_KEY");
     }
 

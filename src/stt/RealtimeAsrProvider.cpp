@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkRequest>
+#include <QNetworkProxy>
 #include <QUrlQuery>
 #include <utility>
 
@@ -12,6 +13,9 @@ namespace kdict {
 
 RealtimeAsrProvider::RealtimeAsrProvider(QObject *parent) : QObject(parent)
 {
+    // Realtime ASR endpoints are often private LAN services.  Do not let a
+    // desktop/system proxy turn a direct WebSocket connection into a 403.
+    socket_.setProxy(QNetworkProxy::NoProxy);
     connectionTimer_.setSingleShot(true);
     finalizationTimer_.setSingleShot(true);
 
@@ -20,7 +24,9 @@ RealtimeAsrProvider::RealtimeAsrProvider(QObject *parent) : QObject(parent)
         if (active_) fail(QStringLiteral("Realtime WebSocket error: %1").arg(socket_.errorString()));
     });
     connect(&socket_, &QWebSocket::disconnected, this, [this]() {
-        if (active_ && !commitSent_) fail(QStringLiteral("Realtime WebSocket disconnected unexpectedly"));
+        // If the socket disappears before we have emitted finalTranscript, fail
+        // immediately so the controller can use its retained-audio batch fallback.
+        if (active_) fail(QStringLiteral("Realtime WebSocket disconnected unexpectedly"));
     });
     connect(&connectionTimer_, &QTimer::timeout, this, [this]() {
         fail(QStringLiteral("Realtime session setup timed out"));

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(kde-dictation VERSION 0.1.0 LANGUAGES CXX)
+project(kde-dictation VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,6 +24,7 @@ endif()
 add_library(kde_dictation_core STATIC
     src/app/DictationState.cpp
     src/app/FallbackPolicy.cpp
+    src/app/LiveTranscriptReconciler.cpp
     src/audio/WavEncoder.cpp
     src/config/Config.cpp
     src/stt/RealtimeEventParser.cpp

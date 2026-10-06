@@ -30,6 +30,7 @@ QString errorText(const QJsonObject &obj)
         const auto message = e.value(QStringLiteral("message"));
         if (message.isString()) return message.toString();
     }
+    if (error.isString()) return error.toString();
     return firstText(obj);
 }
 

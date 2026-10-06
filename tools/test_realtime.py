@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""Smoke-test the deployed NeMo/LiteLLM realtime ASR path.
+"""Smoke-test vLLM/Voxtral realtime ASR through LiteLLM.
 
 Usage:
-  python3 tools/test_realtime.py WSS_URL API_KEY audio.pcm
+  python3 tools/test_realtime.py \
+    'wss://LITELLM/v1/realtime?model=asr-realtime' API_KEY audio.pcm
 
-The PCM file must be little-endian mono PCM16 at 16 kHz unless you change
-SAMPLE_RATE below. This intentionally matches the protocol in the user's
-nemo-stt/LiteLLM relay bundle, not the generic OpenAI Realtime protocol.
+The PCM file must be little-endian mono PCM16 at 16 kHz.
 """
 import asyncio
+import base64
 import json
 import sys
 
-SAMPLE_RATE = 16000
+CHUNK_BYTES = 3200  # 100 ms of PCM16 mono at 16 kHz
+
 
 async def main():
     try:
@@ -28,30 +29,50 @@ async def main():
         url,
         additional_headers={"Authorization": f"Bearer {key}"},
         max_size=None,
+        # Realtime ASR commonly runs on a private LAN host.  Bypass automatic
+        # proxy discovery so a corporate/system proxy cannot reject its WS
+        # upgrade before the backend receives the request.
+        proxy=None,
     ) as ws:
-        print("<-", await ws.recv())
-        await ws.send(json.dumps({
-            "type": "session.update",
-            "session": {
-                "sample_rate": SAMPLE_RATE,
-                "automatic_punctuation": True,
-            },
-        }))
-        print("<-", await ws.recv())
+        created = json.loads(await ws.recv())
+        print("<-", json.dumps(created, ensure_ascii=False))
+        if created.get("type") != "session.created":
+            raise RuntimeError(f"expected session.created, got {created}")
 
+        await ws.send(json.dumps({"type": "session.update", "model": "asr-realtime"}))
+        # vLLM starts a streaming utterance after a non-final commit.
+        await ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+
+        async def receive():
+            full = []
+            while True:
+                msg = await ws.recv()
+                if not isinstance(msg, str):
+                    continue
+                obj = json.loads(msg)
+                event_type = obj.get("type", "")
+                if event_type == "transcription.delta":
+                    delta = obj.get("delta", obj.get("text", ""))
+                    full.append(delta)
+                    print(delta, end="", flush=True)
+                elif event_type == "transcription.done":
+                    print("\n\nFINAL:", obj.get("text", ""))
+                    return
+                elif event_type == "error":
+                    raise RuntimeError(obj.get("error", obj))
+
+        receiver = asyncio.create_task(receive())
         with open(pcm, "rb") as f:
-            while chunk := f.read(3200):
-                await ws.send(chunk)
+            while chunk := f.read(CHUNK_BYTES):
+                await ws.send(json.dumps({
+                    "type": "input_audio_buffer.append",
+                    "audio": base64.b64encode(chunk).decode("ascii"),
+                }))
                 await asyncio.sleep(0.1)
 
-        await ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
-        while True:
-            msg = await ws.recv()
-            print("<-", msg)
-            if isinstance(msg, str):
-                obj = json.loads(msg)
-                if str(obj.get("type", "")).endswith(".completed"):
-                    return
+        await ws.send(json.dumps({"type": "input_audio_buffer.commit", "final": True}))
+        await receiver
+
 
 if __name__ == "__main__":
     asyncio.run(main())

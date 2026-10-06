@@ -1,6 +1,7 @@
 #include "app/DictationController.h"
 
 #include "app/FallbackPolicy.h"
+#include "app/LiveTranscriptReconciler.h"
 #include "audio/AudioRecorder.h"
 #include "audio/WavEncoder.h"
 #include "output/TextOutput.h"
@@ -45,6 +46,7 @@ DictationController::DictationController(const QString &configPath,
 
     connect(batch_, &BatchOpenAIProvider::finalTranscript, this, &DictationController::handleFinalTranscript);
     connect(batch_, &BatchOpenAIProvider::error, this, &DictationController::fail);
+    connect(realtime_, &RealtimeAsrProvider::partialTranscript, this, &DictationController::handlePartialTranscript);
     connect(realtime_, &RealtimeAsrProvider::finalTranscript, this, &DictationController::handleFinalTranscript);
     connect(realtime_, &RealtimeAsrProvider::error, this, &DictationController::handleRealtimeError);
 
@@ -102,13 +104,18 @@ void DictationController::startRecording()
 
     capturedPcm_.clear();
     realtimeFailed_ = false;
+    streamedText_.clear();
 
     if (config_.transcription.mode == TranscriptionMode::Realtime) {
+        if (config_.transcription.realtime.liveInsert) {
+            output_->beginStream(config_.output, config_.transcription.realtime.liveFlushMs);
+        }
         realtime_->start(config_.transcription, config_.audio.sampleRate);
     }
 
     if (!audio_->start(config_.audio.sampleRate)) {
         realtime_->abort();
+        output_->abortStream();
         fail(audio_->lastError());
         return;
     }
@@ -177,6 +184,19 @@ void DictationController::startBatch(const QByteArray &pcm)
     }
 }
 
+void DictationController::handlePartialTranscript(const QString &text)
+{
+    if (config_.transcription.mode != TranscriptionMode::Realtime
+        || !config_.transcription.realtime.liveInsert
+        || text.isEmpty()) return;
+
+    const auto current = state_.state();
+    if (current != DictationState::Recording && current != DictationState::Finalizing) return;
+
+    streamedText_ += text;
+    output_->appendStream(text);
+}
+
 void DictationController::handleFinalTranscript(const QString &text)
 {
     if (state_.state() != DictationState::Finalizing) return;
@@ -191,7 +211,35 @@ void DictationController::handleFinalTranscript(const QString &text)
 
     if (!state_.beginInserting()) return;
     tray_->showInserting();
-    output_->paste(finalText, config_.output);
+
+    const bool live = config_.transcription.mode == TranscriptionMode::Realtime
+        && config_.transcription.realtime.liveInsert
+        && output_->streamActive();
+    if (!live) {
+        output_->paste(finalText, config_.output);
+        return;
+    }
+
+    const auto reconciliation = LiveTranscriptReconciler::reconcile(streamedText_, finalText);
+    switch (reconciliation.kind) {
+    case LiveReconcileKind::Exact:
+        output_->finishStream();
+        break;
+    case LiveReconcileKind::EquivalentWhitespace:
+        output_->finishStreamToClipboard(finalText);
+        break;
+    case LiveReconcileKind::AppendSuffix:
+        output_->finishStream(reconciliation.suffix);
+        break;
+    case LiveReconcileKind::StreamedLonger:
+        tray_->showInfo(QStringLiteral("Final transcript was shorter than the live text; final text copied to clipboard"));
+        output_->finishStreamToClipboard(finalText);
+        break;
+    case LiveReconcileKind::Mismatch:
+        tray_->showInfo(QStringLiteral("Final transcript differed from live text; final text copied to clipboard"));
+        output_->finishStreamToClipboard(finalText);
+        break;
+    }
 }
 
 void DictationController::fail(const QString &message)
@@ -200,6 +248,7 @@ void DictationController::fail(const QString &message)
     audio_->abort();
     realtime_->abort();
     batch_->abort();
+    output_->abortStream();
     state_.fail();
     qWarning().noquote() << message;
     tray_->showError(message);

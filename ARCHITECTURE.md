@@ -19,7 +19,7 @@ DictationController -----> TrayController (KStatusNotifierItem)
      |                      POST /v1/audio/transcriptions
      |
      +--------------------> RealtimeAsrProvider
-     |                      WS /v1/audio/transcriptions/realtime
+     |                      WS /v1/realtime (vLLM/Voxtral via LiteLLM)
      |
      +--------------------> AudioRecorder (QAudioSource)
                              mono PCM16
@@ -76,11 +76,25 @@ Response contract:
 
 ## Realtime STT
 
-The realtime adapter is intentionally backend-specific and isolated. It currently
-implements the NeMo-Speech.cpp realtime transcription protocol exposed by the
-user's authenticated LiteLLM relay.
+The realtime adapter implements the vLLM speech-to-text Realtime API exposed
+through LiteLLM `/v1/realtime?model=asr-realtime`. Audio is PCM16 mono 16 kHz,
+base64 encoded inside `input_audio_buffer.append` JSON events.
 
-The desktop app must not leak this protocol into unrelated components.
+`transcription.delta` is incremental text. When `live_insert=true`, deltas are
+coalesced briefly and serialized through the clipboard + ydotool output path so
+words appear in the focused application while the user speaks.
+
+On `transcription.done`, the complete final transcript is reconciled against the
+concatenated deltas:
+
+```text
+exact match          -> no duplicate final paste
+final extends live   -> paste only the missing suffix
+whitespace-only diff -> leave field unchanged, put final in clipboard
+other mismatch       -> never backspace; put authoritative final in clipboard
+```
+
+This keeps live insertion safe even if a backend or fallback transcript differs.
 
 ## Automatic realtime -> batch fallback
 
@@ -111,7 +125,7 @@ This turns realtime into a latency optimization rather than a reliability depend
 
 ## Text output
 
-Primary path:
+Batch primary path:
 
 ```text
 final UTF-8 transcript
@@ -121,11 +135,23 @@ final UTF-8 transcript
   -> currently focused control
 ```
 
-Do not type the transcript character-by-character with ydotool. Clipboard transport
-avoids keyboard-layout and Unicode problems.
+Realtime live path:
 
-If ydotool or ydotoold is unavailable, leave the text in the clipboard and surface
-a warning; the transcript must not be lost.
+```text
+transcription.delta
+  -> short coalescing queue
+  -> QClipboard
+  -> ydotool Ctrl+V
+  -> visible text while speaking
+```
+
+Only one paste operation is in flight at a time, so a newer clipboard update can
+never overtake an older paste. At stream completion the complete transcript is
+left in the clipboard. Do not type transcript characters with ydotool; ydotool
+only synthesizes the paste shortcut, avoiding layout and Unicode problems.
+
+If ydotool or ydotoold becomes unavailable, automatic live paste is disabled for
+that stream and the assembled transcript remains available in the clipboard.
 
 ## Focus semantics
 
@@ -172,5 +198,4 @@ This split is intentional.
 - floating overlay;
 - transcript history database;
 - LLM cleanup;
-- partial realtime typing;
 - model hosting.

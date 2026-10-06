@@ -40,6 +40,10 @@ private slots:
         auto event = RealtimeEventParser::parse(R"({"type":"error","error":{"message":"boom"}})");
         QCOMPARE(event.kind, RealtimeEventKind::Error);
         QCOMPARE(event.errorMessage, QStringLiteral("boom"));
+
+        auto vllm = RealtimeEventParser::parse(R"({"type":"error","error":"bad audio","code":"processing_error"})");
+        QCOMPARE(vllm.kind, RealtimeEventKind::Error);
+        QCOMPARE(vllm.errorMessage, QStringLiteral("bad audio"));
     }
 };
 

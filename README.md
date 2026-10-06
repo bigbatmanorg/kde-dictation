@@ -7,10 +7,10 @@ The app owns only desktop integration and audio capture. Speech recognition is e
 ```text
 KGlobalAccel
    -> record microphone
-   -> batch OpenAI-compatible STT OR realtime NeMo ASR
-   -> final transcript
-   -> Qt clipboard
-   -> ydotool Ctrl+V
+   -> batch OpenAI-compatible STT OR realtime vLLM/Voxtral
+   -> realtime deltas are pasted while you speak
+   -> final transcript is reconciled safely
+   -> Qt clipboard + ydotool Ctrl+V
    -> currently focused application
 ```
 
@@ -20,6 +20,7 @@ KGlobalAccel
 - Plasma owns the global keyboard binding.
 - Activation can be `toggle` or `push_to_talk`.
 - STT can be `batch` or `realtime`.
+- Realtime deltas can be inserted into the focused control while you speak.
 - Realtime always retains a local PCM copy.
 - Realtime failure automatically falls back to batch when enabled.
 - No AT-SPI, active-window tracking, focus restoration, raw evdev listener, or settings GUI.
@@ -47,24 +48,28 @@ Expected response:
 
 ### Realtime
 
-The current realtime adapter targets the protocol already exposed by the user's
-NeMo-Speech.cpp + LiteLLM WebSocket relay:
+The realtime adapter targets the vLLM speech-to-text Realtime API through
+LiteLLM:
 
 ```text
-WS(S) /v1/audio/transcriptions/realtime
+WS(S) /v1/realtime?model=asr-realtime
 Authorization: Bearer <key>
 ```
 
 Flow:
 
-1. receive `session.created`
-2. send `session.update`
-3. stream binary little-endian mono PCM16
-4. send `input_audio_buffer.commit`
-5. wait for `conversation.item.input_audio_transcription.completed`
+1. receive `session.created`;
+2. send `session.update`;
+3. send base64 PCM16/16 kHz `input_audio_buffer.append` events;
+4. receive `transcription.delta` incremental text while speaking;
+5. paste coalesced deltas into the currently focused control;
+6. on stop, send `input_audio_buffer.commit` with `final=true`;
+7. receive `transcription.done` and reconcile it with text already inserted.
 
-This realtime protocol is deliberately isolated in `RealtimeAsrProvider`; it is
-not claimed to be the generic OpenAI Realtime API.
+The app is append-only during live dictation. If the authoritative final or the
+batch fallback differs from text already inserted, it never sends destructive
+Backspaces. Instead it leaves the focused control alone and copies the final
+transcript to the clipboard with a notification.
 
 ## Kubuntu / Plasma 6 setup
 
@@ -119,6 +124,29 @@ For development:
 ./scripts/run-dev.sh
 ```
 
+### Upgrading an existing install
+
+From this source tree:
+
+```bash
+./scripts/test.sh
+./scripts/install-user.sh
+```
+
+`install-user.sh` keeps your existing `~/.config/kde-dictation/config.yaml`. The
+new realtime live-insert settings have safe defaults in code, so an older config
+works without changes. Add these only if you want to tune latency:
+
+```yaml
+transcription:
+  realtime:
+    live_insert: true
+    live_flush_ms: 75
+
+output:
+  live_paste_delay_ms: 40
+```
+
 The default global shortcut is `Meta+Shift+D`. Once the app has run and
 registered its action, change **KDE Dictation -> Dictate** in Plasma's global
 shortcut settings. The shortcut is intentionally not stored in YAML.
@@ -139,6 +167,11 @@ transcription:
   realtime:
     fallback_to_batch: true
     finalization_timeout_ms: 5000
+    live_insert: true
+    live_flush_ms: 75
+
+output:
+  live_paste_delay_ms: 40
 ```
 
 ## Diagnostics
@@ -168,7 +201,7 @@ Test the deployed realtime WebSocket independently of the desktop app:
 ```bash
 pip install websockets
 python3 tools/test_realtime.py \
-  wss://YOUR-LITELLM/v1/audio/transcriptions/realtime \
+  'wss://YOUR-LITELLM/v1/realtime?model=asr-realtime' \
   "$LITELLM_API_KEY" \
   speech.pcm
 ```
@@ -178,6 +211,9 @@ Create the required PCM file with:
 ```bash
 ffmpeg -i speech.wav -f s16le -acodec pcm_s16le -ac 1 -ar 16000 speech.pcm
 ```
+
+The tool prints each `transcription.delta` immediately, followed by the final
+`transcription.done` text.
 
 ## Tests
 
@@ -199,6 +235,7 @@ Current deterministic tests cover:
 - realtime event parsing;
 - HTTP/WSS URL normalization;
 - automatic realtime -> batch fallback policy;
+- live-final reconciliation (exact/suffix/mismatch safety);
 - source-tree architecture contract.
 
 ## Installation layout
@@ -217,7 +254,7 @@ User install defaults to:
 - Audio capture requests mono PCM16 at the configured sample rate (default 16 kHz).
   There is intentionally no resampler yet. If a real target microphone rejects
   this PipeWire format, add resampling rather than redesigning the app.
-- Realtime partials are not typed into applications.
+- Realtime live insertion is append-only; final mismatches are copied to the clipboard rather than destructively correcting typed text.
 - The transcript is left in the clipboard after insertion.
 - The target is whichever control owns keyboard focus when paste occurs.
 - Only `ctrl+v` and `shift+insert` output shortcuts are currently supported.

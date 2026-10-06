@@ -28,6 +28,8 @@ struct RealtimeConfig {
     bool automaticPunctuation = true;
     bool fallbackToBatch = true;
     int finalizationTimeoutMs = 5000;
+    bool liveInsert = true;
+    int liveFlushMs = 75;
 };
 
 struct TranscriptionConfig {
@@ -45,6 +47,7 @@ struct OutputConfig {
     QString method = QStringLiteral("clipboard_paste");
     QString pasteShortcut = QStringLiteral("ctrl+v");
     int pasteDelayMs = 80;
+    int livePasteDelayMs = 40;
 };
 
 struct LoggingConfig {

@@ -9,6 +9,7 @@ required = [
     "ARCHITECTURE.md",
     "src/main.cpp",
     "src/app/DictationController.cpp",
+    "src/app/LiveTranscriptReconciler.cpp",
     "src/stt/BatchOpenAIProvider.cpp",
     "src/stt/RealtimeAsrProvider.cpp",
     "src/output/TextOutput.cpp",
@@ -24,10 +25,14 @@ controller = (root / "src/app/DictationController.cpp").read_text()
 assert "FallbackPolicy::onRealtimeFailure" in controller
 assert "startBatchFallback" in controller
 assert "WavEncoder::pcm16MonoToWav" in controller
+assert "partialTranscript" in controller
+assert "appendStream" in controller
+assert "LiveTranscriptReconciler::reconcile" in controller
 
 output = (root / "src/output/TextOutput.cpp").read_text()
 assert "QGuiApplication::clipboard()->setText" in output
 assert 'QStringLiteral("29:1")' in output and 'QStringLiteral("47:1")' in output
+assert "beginStream" in output and "appendStream" in output and "finishStream" in output
 
 shortcut = (root / "src/shortcut/ShortcutController.cpp").read_text()
 assert "globalShortcutActiveChanged" in shortcut

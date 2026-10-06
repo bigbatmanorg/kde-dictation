@@ -29,12 +29,18 @@ transcription:
     automatic_punctuation: true
     fallback_to_batch: true
     finalization_timeout_ms: 5000
+    # Realtime mode inserts incremental Voxtral deltas into the focused field.
+    live_insert: true
+    # Coalesce very small token deltas before each paste operation.
+    live_flush_ms: 75
 
 output:
   method: clipboard_paste
   paste_shortcut: ctrl+v   # ctrl+v | shift+insert
   # Plasma Wayland needs a short delay for clipboard ownership to propagate.
   paste_delay_ms: 300
+  # Realtime chunks use a shorter delay so words appear while you speak.
+  live_paste_delay_ms: 40
 
 logging:
   log_transcripts: false

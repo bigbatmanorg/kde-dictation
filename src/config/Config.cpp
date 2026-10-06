@@ -106,11 +106,14 @@ AppConfig ConfigLoader::load(const QString &path)
     cfg.transcription.realtime.automaticPunctuation = qbool(realtime, "automatic_punctuation", cfg.transcription.realtime.automaticPunctuation);
     cfg.transcription.realtime.fallbackToBatch = qbool(realtime, "fallback_to_batch", cfg.transcription.realtime.fallbackToBatch);
     cfg.transcription.realtime.finalizationTimeoutMs = qint(realtime, "finalization_timeout_ms", cfg.transcription.realtime.finalizationTimeoutMs);
+    cfg.transcription.realtime.liveInsert = qbool(realtime, "live_insert", cfg.transcription.realtime.liveInsert);
+    cfg.transcription.realtime.liveFlushMs = qint(realtime, "live_flush_ms", cfg.transcription.realtime.liveFlushMs);
 
     const auto output = root["output"];
     cfg.output.method = qstr(output, "method", cfg.output.method);
     cfg.output.pasteShortcut = qstr(output, "paste_shortcut", cfg.output.pasteShortcut);
     cfg.output.pasteDelayMs = qint(output, "paste_delay_ms", cfg.output.pasteDelayMs);
+    cfg.output.livePasteDelayMs = qint(output, "live_paste_delay_ms", cfg.output.livePasteDelayMs);
 
     const auto logging = root["logging"];
     cfg.logging.logTranscripts = qbool(logging, "log_transcripts", cfg.logging.logTranscripts);
@@ -148,6 +151,12 @@ void ConfigLoader::validate(const AppConfig &cfg)
     }
     if (cfg.transcription.realtime.model.trimmed().isEmpty()) {
         throw std::runtime_error("realtime.model cannot be empty");
+    }
+    if (cfg.transcription.realtime.liveFlushMs < 0 || cfg.transcription.realtime.liveFlushMs > 2000) {
+        throw std::runtime_error("realtime.live_flush_ms must be between 0 and 2000");
+    }
+    if (cfg.output.livePasteDelayMs < 0 || cfg.output.livePasteDelayMs > 1000) {
+        throw std::runtime_error("output.live_paste_delay_ms must be between 0 and 1000");
     }
 }
 
