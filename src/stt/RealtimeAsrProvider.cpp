@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkRequest>
+#include <QUrlQuery>
 #include <utility>
 
 namespace kdict {
@@ -36,7 +37,11 @@ void RealtimeAsrProvider::start(const TranscriptionConfig &config, int sampleRat
     sampleRate_ = sampleRate;
     active_ = true;
 
-    QNetworkRequest request(makeWebSocketEndpoint(config_.baseUrl, config_.realtime.path));
+    QUrl endpoint = makeWebSocketEndpoint(config_.baseUrl, config_.realtime.path);
+    QUrlQuery query(endpoint);
+    query.addQueryItem(QStringLiteral("model"), config_.realtime.model);
+    endpoint.setQuery(query);
+    QNetworkRequest request(endpoint);
     const QString key = config_.resolvedApiKey();
     if (!key.isEmpty()) request.setRawHeader("Authorization", QByteArray("Bearer ") + key.toUtf8());
     socket_.open(request);
@@ -47,7 +52,10 @@ void RealtimeAsrProvider::pushAudio(const QByteArray &pcm16)
 {
     if (!active_ || pcm16.isEmpty()) return;
     if (sessionReady_) {
-        socket_.sendBinaryMessage(pcm16);
+        QJsonObject event;
+        event.insert(QStringLiteral("type"), QStringLiteral("input_audio_buffer.append"));
+        event.insert(QStringLiteral("audio"), QString::fromLatin1(pcm16.toBase64()));
+        socket_.sendTextMessage(QString::fromUtf8(QJsonDocument(event).toJson(QJsonDocument::Compact)));
     } else {
         pendingAudio_.append(pcm16);
     }
@@ -78,22 +86,20 @@ void RealtimeAsrProvider::abort()
 
 void RealtimeAsrProvider::sendSessionUpdate()
 {
-    QJsonObject session;
-    session.insert(QStringLiteral("sample_rate"), sampleRate_);
-    session.insert(QStringLiteral("automatic_punctuation"), config_.realtime.automaticPunctuation);
-    if (!config_.realtime.language.trimmed().isEmpty() && config_.realtime.language.toLower() != QStringLiteral("auto")) {
-        session.insert(QStringLiteral("language"), config_.realtime.language);
-    }
-
     QJsonObject root;
     root.insert(QStringLiteral("type"), QStringLiteral("session.update"));
-    root.insert(QStringLiteral("session"), session);
+    root.insert(QStringLiteral("model"), config_.realtime.model);
     socket_.sendTextMessage(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact)));
 }
 
 void RealtimeAsrProvider::flushPendingAudio()
 {
-    for (const auto &chunk : std::as_const(pendingAudio_)) socket_.sendBinaryMessage(chunk);
+    for (const auto &chunk : std::as_const(pendingAudio_)) {
+        QJsonObject event;
+        event.insert(QStringLiteral("type"), QStringLiteral("input_audio_buffer.append"));
+        event.insert(QStringLiteral("audio"), QString::fromLatin1(chunk.toBase64()));
+        socket_.sendTextMessage(QString::fromUtf8(QJsonDocument(event).toJson(QJsonDocument::Compact)));
+    }
     pendingAudio_.clear();
 }
 
@@ -101,8 +107,10 @@ void RealtimeAsrProvider::sendCommit()
 {
     if (commitSent_) return;
     commitSent_ = true;
-    const QByteArray json = R"({"type":"input_audio_buffer.commit"})";
-    socket_.sendTextMessage(QString::fromUtf8(json));
+    QJsonObject event;
+    event.insert(QStringLiteral("type"), QStringLiteral("input_audio_buffer.commit"));
+    event.insert(QStringLiteral("final"), true);
+    socket_.sendTextMessage(QString::fromUtf8(QJsonDocument(event).toJson(QJsonDocument::Compact)));
     finalizationTimer_.start(config_.realtime.finalizationTimeoutMs);
 }
 
@@ -124,11 +132,22 @@ void RealtimeAsrProvider::handleTextMessage(const QString &message)
     switch (event.kind) {
     case RealtimeEventKind::SessionCreated:
         sendSessionUpdate();
+        // vLLM accepts audio immediately after session.update and does not
+        // guarantee a session.updated acknowledgement before deltas arrive.
+        connectionTimer_.stop();
+        sessionReady_ = true;
+        socket_.sendTextMessage(QStringLiteral(R"({"type":"input_audio_buffer.commit"})"));
+        flushPendingAudio();
+        if (finishRequested_) sendCommit();
         break;
     case RealtimeEventKind::SessionUpdated:
         connectionTimer_.stop();
-        sessionReady_ = true;
-        flushPendingAudio();
+        // Some servers send this acknowledgement; vLLM may not.
+        if (!sessionReady_) {
+            sessionReady_ = true;
+            socket_.sendTextMessage(QStringLiteral(R"({"type":"input_audio_buffer.commit"})"));
+            flushPendingAudio();
+        }
         if (finishRequested_) sendCommit();
         break;
     case RealtimeEventKind::Delta:

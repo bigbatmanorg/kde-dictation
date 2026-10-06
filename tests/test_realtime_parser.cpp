@@ -24,6 +24,17 @@ private slots:
         QCOMPARE(completed.text, QStringLiteral("hello world"));
     }
 
+    void parsesVllmRealtimeEvents()
+    {
+        auto delta = RealtimeEventParser::parse(R"({"type":"transcription.delta","text":"hello"})");
+        QCOMPARE(delta.kind, RealtimeEventKind::Delta);
+        QCOMPARE(delta.text, QStringLiteral("hello"));
+
+        auto done = RealtimeEventParser::parse(R"({"type":"transcription.done","text":"hello world"})");
+        QCOMPARE(done.kind, RealtimeEventKind::Completed);
+        QCOMPARE(done.text, QStringLiteral("hello world"));
+    }
+
     void parsesError()
     {
         auto event = RealtimeEventParser::parse(R"({"type":"error","error":{"message":"boom"}})");

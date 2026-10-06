@@ -101,6 +101,7 @@ AppConfig ConfigLoader::load(const QString &path)
 
     const auto realtime = tx["realtime"];
     cfg.transcription.realtime.path = qstr(realtime, "path", cfg.transcription.realtime.path);
+    cfg.transcription.realtime.model = qstr(realtime, "model", cfg.transcription.realtime.model);
     cfg.transcription.realtime.language = qstr(realtime, "language", cfg.transcription.realtime.language);
     cfg.transcription.realtime.automaticPunctuation = qbool(realtime, "automatic_punctuation", cfg.transcription.realtime.automaticPunctuation);
     cfg.transcription.realtime.fallbackToBatch = qbool(realtime, "fallback_to_batch", cfg.transcription.realtime.fallbackToBatch);
@@ -144,6 +145,9 @@ void ConfigLoader::validate(const AppConfig &cfg)
     }
     if (cfg.transcription.realtime.finalizationTimeoutMs < 250) {
         throw std::runtime_error("realtime.finalization_timeout_ms must be at least 250");
+    }
+    if (cfg.transcription.realtime.model.trimmed().isEmpty()) {
+        throw std::runtime_error("realtime.model cannot be empty");
     }
 }
 

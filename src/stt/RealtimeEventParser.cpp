@@ -53,10 +53,12 @@ RealtimeEvent RealtimeEventParser::parse(const QString &message)
         event.kind = RealtimeEventKind::SessionCreated;
     } else if (event.type == QStringLiteral("session.updated")) {
         event.kind = RealtimeEventKind::SessionUpdated;
-    } else if (event.type.endsWith(QStringLiteral("input_audio_transcription.delta"))) {
+    } else if (event.type == QStringLiteral("transcription.delta")
+               || event.type.endsWith(QStringLiteral("input_audio_transcription.delta"))) {
         event.kind = RealtimeEventKind::Delta;
         event.text = firstText(obj);
-    } else if (event.type.endsWith(QStringLiteral("input_audio_transcription.completed"))) {
+    } else if (event.type == QStringLiteral("transcription.done")
+               || event.type.endsWith(QStringLiteral("input_audio_transcription.completed"))) {
         event.kind = RealtimeEventKind::Completed;
         event.text = firstText(obj);
     } else if (event.type == QStringLiteral("input_audio_buffer.committed")) {

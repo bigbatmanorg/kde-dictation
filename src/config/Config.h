@@ -22,7 +22,8 @@ struct BatchConfig {
 };
 
 struct RealtimeConfig {
-    QString path = QStringLiteral("/v1/audio/transcriptions/realtime");
+    QString path = QStringLiteral("/v1/realtime");
+    QString model = QStringLiteral("asr-realtime");
     QString language = QStringLiteral("auto");
     bool automaticPunctuation = true;
     bool fallbackToBatch = true;

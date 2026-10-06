@@ -13,7 +13,8 @@ sudo apt install -y \
   libkf6statusnotifieritem-dev \
   libyaml-cpp-dev \
   ydotool \
-  python3
+  python3 \
+  python3-websockets
 
 echo "Dependencies installed."
 echo "Run ./scripts/setup-uinput.sh next if ydotoold cannot access /dev/uinput."

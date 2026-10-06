@@ -23,7 +23,8 @@ transcription:
     timeout_ms: 1200000
 
   realtime:
-    path: /v1/audio/transcriptions/realtime
+    path: /v1/realtime
+    model: asr-realtime
     language: auto
     automatic_punctuation: true
     fallback_to_batch: true
