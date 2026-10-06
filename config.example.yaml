@@ -1,0 +1,39 @@
+activation:
+  mode: toggle           # toggle | push_to_talk
+
+audio:
+  device: default
+  sample_rate: 16000
+  max_recording_seconds: 900
+
+transcription:
+  mode: batch            # batch | realtime
+  base_url: https://PASTE-YOUR-LITELLM-HOST
+  # Paste the API key here for the simplest setup. This file is created with
+  # mode 0600 by the installer, so only your user can read it.
+  api_key_env: ""
+  api_key: ""
+  # Optional alternative for users who manage secrets through their session:
+  # replace api_key_env with: LITELLM_API_KEY
+
+  batch:
+    model: whisper-1
+    path: /v1/audio/transcriptions
+    language: auto
+    timeout_ms: 1200000
+
+  realtime:
+    path: /v1/audio/transcriptions/realtime
+    language: auto
+    automatic_punctuation: true
+    fallback_to_batch: true
+    finalization_timeout_ms: 5000
+
+output:
+  method: clipboard_paste
+  paste_shortcut: ctrl+v   # ctrl+v | shift+insert
+  # Plasma Wayland needs a short delay for clipboard ownership to propagate.
+  paste_delay_ms: 300
+
+logging:
+  log_transcripts: false
