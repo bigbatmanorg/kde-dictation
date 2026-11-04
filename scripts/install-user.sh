@@ -30,6 +30,10 @@ Terminal=false
 X-KDE-autostart-after=panel
 DESKTOP
 
+case ":$PATH:" in
+  *":$PREFIX/bin:"*) ;;
+  *) echo "note: $PREFIX/bin is not on your PATH; add it to run 'kde-dictation --check' from a terminal." ;;
+esac
 echo "Installed $PREFIX/bin/kde-dictation"
 echo "Autostart: $AUTOSTART_DIR/org.amvc.kdedictation.desktop"
 echo "Configure the shortcut in Plasma after the app has registered its Dictate action."

@@ -1,5 +1,7 @@
 #include "audio/AudioRecorder.h"
 
+#include "audio/DeviceSelection.h"
+
 #include <QAudioDevice>
 #include <QAudioSource>
 #include <QMediaDevices>
@@ -11,15 +13,47 @@ AudioRecorder::AudioRecorder(QObject *parent) : QObject(parent) {}
 
 AudioRecorder::~AudioRecorder() = default;
 
+QAudioDevice AudioRecorder::resolveDevice(const QString &wanted)
+{
+    const QList<QAudioDevice> inputs = QMediaDevices::audioInputs();
+    const QByteArray defaultId = QMediaDevices::defaultAudioInput().id();
+    QList<AudioDeviceInfo> infos;
+    for (const QAudioDevice &d : inputs) {
+        infos.append({QString::fromUtf8(d.id()), d.description(), d.id() == defaultId});
+    }
+    const int index = selectAudioDevice(infos, wanted);
+    if (index >= 0) return inputs.at(index);
+    // The default may be reported even when audioInputs() omits it.
+    const QString w = wanted.trimmed();
+    if (w.isEmpty() || w.compare(QStringLiteral("default"), Qt::CaseInsensitive) == 0) {
+        return QMediaDevices::defaultAudioInput();
+    }
+    return {};
+}
+
+QStringList AudioRecorder::describeInputs()
+{
+    QStringList lines;
+    const QByteArray defaultId = QMediaDevices::defaultAudioInput().id();
+    for (const QAudioDevice &d : QMediaDevices::audioInputs()) {
+        lines << QStringLiteral("%1%2  [id: %3]")
+                     .arg(d.id() == defaultId ? QStringLiteral("* ") : QStringLiteral("  "),
+                          d.description(), QString::fromUtf8(d.id()));
+    }
+    return lines;
+}
+
 bool AudioRecorder::start(int sampleRate)
 {
     abort();
     pcm_.clear();
     lastError_.clear();
 
-    const QAudioDevice device = QMediaDevices::defaultAudioInput();
+    const QAudioDevice device = resolveDevice(deviceName_);
     if (device.isNull()) {
-        lastError_ = QStringLiteral("No default audio input device available");
+        lastError_ = deviceName_.trimmed().isEmpty() || deviceName_.compare(QStringLiteral("default"), Qt::CaseInsensitive) == 0
+            ? QStringLiteral("No default audio input device available")
+            : QStringLiteral("Audio input '%1' not found (see kde-dictation --list-devices)").arg(deviceName_);
         return false;
     }
 

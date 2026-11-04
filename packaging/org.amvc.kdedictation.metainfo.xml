@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.amvc.kdedictation</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>KDE Dictation</name>
+  <summary>Global shortcut dictation for KDE Plasma</summary>
+  <description>
+    <p>
+      KDE Dictation records your microphone on a global shortcut, sends the audio to an
+      OpenAI-compatible speech-to-text service (batch or realtime) and pastes the transcript
+      into the focused application.
+    </p>
+    <p>
+      It works on Plasma Wayland and X11. Speech recognition is performed by an external service
+      that you configure.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.amvc.kdedictation.desktop</launchable>
+  <url type="homepage">https://github.com/bigbatmanorg/kde-dictation</url>
+  <url type="bugtracker">https://github.com/bigbatmanorg/kde-dictation/issues</url>
+  <categories>
+    <category>Utility</category>
+    <category>Audio</category>
+  </categories>
+  <provides>
+    <binary>kde-dictation</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.3.0" date="2026-11-04"/>
+  </releases>
+</component>

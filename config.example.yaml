@@ -2,6 +2,7 @@ activation:
   mode: toggle           # toggle | push_to_talk
 
 audio:
+  # "default", a device id, or part of its description. List with: kde-dictation --list-devices
   device: default
   sample_rate: 16000
   max_recording_seconds: 900
@@ -41,6 +42,13 @@ output:
   paste_delay_ms: 300
   # Realtime chunks use a shorter delay so words appear while you speak.
   live_paste_delay_ms: 40
+  # Key-injection backend: auto | ydotool | xdotool
+  #   auto: xdotool on X11 when installed, otherwise ydotool (always on Wayland)
+  backend: auto
+  # ydotool only. Leave empty to auto-discover a running ydotoold; when none is
+  # reachable the app starts a private one (disable with ydotool_autostart: false).
+  ydotool_socket: ""
+  ydotool_autostart: true
 
 logging:
   log_transcripts: false

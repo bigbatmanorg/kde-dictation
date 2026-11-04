@@ -1,10 +1,12 @@
 #pragma once
 
 #include "config/Config.h"
+#include "output/PasteBackend.h"
 #include <QObject>
 #include <QStringList>
 #include <QTimer>
 #include <functional>
+#include <memory>
 
 namespace kdict {
 
@@ -24,8 +26,12 @@ public:
     void abortStream();
     bool streamActive() const { return streamActive_; }
 
-    static QString ydotoolExecutable();
-    static QString ydotoolSocketPath();
+    // Resolve and prepare the key-injection backend ahead of the first paste
+    // (starts a private ydotoold if necessary). Safe to call repeatedly.
+    void warmUp(const OutputConfig &config);
+
+    // Inspect the backend selected by `config` without starting anything.
+    static BackendStatus backendStatus(const OutputConfig &config);
 
 signals:
     void finished();
@@ -34,13 +40,17 @@ signals:
 private:
     using PasteCallback = std::function<void(bool)>;
 
-    static QStringList ydotoolArgs(const QString &shortcut);
     static bool synchronizeKdeClipboard(const QString &text);
+
+    PasteBackend *backendFor(const OutputConfig &config);
 
     void startPaste(const QString &text, const OutputConfig &config, int delayMs, PasteCallback callback);
     void scheduleStreamFlush();
     void flushStream();
     void finalizeStream();
+
+    std::unique_ptr<PasteBackend> backend_;
+    QString backendKey_;
 
     QTimer streamFlushTimer_;
     OutputConfig streamConfig_;

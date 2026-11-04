@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QByteArray>
+#include <QAudioDevice>
 #include <QAudioFormat>
 #include <memory>
 
@@ -16,6 +17,12 @@ public:
     explicit AudioRecorder(QObject *parent = nullptr);
     ~AudioRecorder() override;
 
+    // Resolves audio.device ("default", id or description fragment) to a device.
+    // A null device is returned when the name does not match any input.
+    static QAudioDevice resolveDevice(const QString &wanted);
+    static QStringList describeInputs();
+
+    void setDeviceName(const QString &name) { deviceName_ = name; }
     bool start(int sampleRate);
     QByteArray stop();
     void abort();
@@ -37,6 +44,7 @@ private:
     QAudioFormat format_;
     bool recording_ = false;
     QString lastError_;
+    QString deviceName_ = QStringLiteral("default");
 };
 
 } // namespace kdict

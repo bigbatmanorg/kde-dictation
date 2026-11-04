@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=KDE Dictation
+GenericName=Voice Dictation
+Comment=Global shortcut dictation for KDE Plasma
+Exec=kde-dictation
+Icon=audio-input-microphone
+Terminal=false
+StartupNotify=false
+X-KDE-autostart-after=panel
+NoDisplay=true

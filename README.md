@@ -10,7 +10,7 @@ KGlobalAccel
    -> batch OpenAI-compatible STT OR realtime vLLM/Voxtral
    -> realtime deltas are pasted while you speak
    -> final transcript is reconciled safely
-   -> Qt clipboard + ydotool Ctrl+V
+   -> Qt clipboard + paste backend (ydotool / xdotool) Ctrl+V
    -> currently focused application
 ```
 
@@ -71,22 +71,43 @@ batch fallback differs from text already inserted, it never sends destructive
 Backspaces. Instead it leaves the focused control alone and copies the final
 transcript to the clipboard with a notification.
 
-## Kubuntu / Plasma 6 setup
+## Supported distributions
 
-From a fresh clone, run one command:
+KDE Dictation needs **KDE Plasma 6** (KDE Frameworks 6, Qt 6.6+). It is built and
+tested in clean containers of:
+
+| Distribution | Packages used by `install-deps.sh` | Paste backend |
+| --- | --- | --- |
+| Fedora KDE (44/45) | `dnf` | ydotool (Wayland), xdotool (X11) |
+| Kubuntu / Ubuntu 25.10, 26.04 | `apt` | ydotool, xdotool |
+| Debian 13 (trixie) | `apt` | xdotool (no `ydotool` package; build it from source for Wayland) |
+| Arch / Manjaro / EndeavourOS | `pacman` | ydotool, xdotool |
+| openSUSE Tumbleweed | `zypper` | ydotool, xdotool |
+
+Any other distribution with Qt 6.6+, KF6 `KGlobalAccel`/`KStatusNotifierItem` and
+yaml-cpp works too; install those through your package manager and use
+`./scripts/build.sh`.
+
+Ubuntu 24.04 / Kubuntu 24.04 ship Plasma 5 and are not supported.
+
+## Quick setup
+
+From a fresh clone, on any supported distribution, run one command:
 
 ```bash
-./scripts/setup-kubuntu.sh
+./scripts/setup.sh
 ```
 
-It installs dependencies, configures `/dev/uinput` safely for `ydotoold`, builds
-and installs the application, enables autostart, and creates a private config at:
+It detects your distribution, installs build dependencies, gives your user access
+to `/dev/uinput` safely (only when needed), builds and installs the application
+into `~/.local`, enables autostart, and creates a private config at:
 
 ```text
 ~/.config/kde-dictation/config.yaml
 ```
 
-Paste only your LiteLLM URL and API key into that file:
+(`setup-kubuntu.sh` still works as an alias.) Paste only your LiteLLM URL and API
+key into that file:
 
 ```yaml
 transcription:
@@ -102,26 +123,54 @@ transcription:
   api_key_env: LITELLM_API_KEY
 ```
 
-If setup added your user to the `input` group, log out of Plasma completely and
-back in once. Do not use `/dev/uinput` mode `0666` as a workaround.
-
 Launch **KDE Dictation** from the application menu, then assign a shortcut in
 **System Settings → Keyboard → Shortcuts → KDE Dictation → Dictate**. The default
-is `Meta+Shift+D`.
-
-For an existing development checkout, the separate steps remain available:
+is `Meta+Shift+D`. Verify everything with:
 
 ```bash
-./scripts/install-deps-kubuntu.sh
-./scripts/setup-uinput.sh
-./scripts/test.sh
-./scripts/install-user.sh
+kde-dictation --check
 ```
 
-For development:
+If `setup-uinput.sh` had to add you to the `input` group, log out of Plasma
+completely and back in once. Never use `/dev/uinput` mode `0666` as a workaround.
+
+### How the paste step works
+
+Plasma Wayland does not allow applications to inject keystrokes, so after copying
+the transcript to the clipboard the app presses the paste shortcut through a
+backend (`output.backend`):
+
+- **ydotool** (default on Wayland): works through `/dev/uinput`. The app finds a
+  running `ydotoold` automatically (`$YDOTOOL_SOCKET`,
+  `$XDG_RUNTIME_DIR/.ydotool_socket`, `/tmp/.ydotool_socket`) and otherwise
+  **starts its own private `ydotoold`**, so you do not have to enable any
+  distribution-specific systemd unit (Fedora ships a *system* unit, Arch a user
+  one, Debian none).
+- **xdotool** (default on X11 when installed): needs no `uinput` access at all.
+
+On Fedora, Arch, openSUSE and current Ubuntu the logged-in user gets `uinput`
+access through systemd-logind `uaccess` ACLs, so no group change is required.
+
+### Packages
+
+- **Fedora**: `packaging/rpm/kde-dictation.spec` (RPMs are attached to GitHub releases).
+- **Arch**: `packaging/arch/PKGBUILD`.
+- **Debian/Ubuntu**: `.deb` files are attached to GitHub releases (built per distro release).
+
+Individual development steps:
 
 ```bash
-./scripts/run-dev.sh
+./scripts/install-deps.sh   # dependencies for your distribution
+./scripts/setup-uinput.sh   # Wayland only
+./scripts/test.sh           # build + unit tests
+./scripts/install-user.sh   # install into ~/.local
+./scripts/run-dev.sh        # run from the build tree
+```
+
+To check a distribution without installing anything on your machine:
+
+```bash
+./scripts/test-in-container.sh fedora:latest   # or ubuntu:26.04, archlinux, debian:trixie, ...
 ```
 
 ### Upgrading an existing install
@@ -129,6 +178,7 @@ For development:
 From this source tree:
 
 ```bash
+git pull
 ./scripts/test.sh
 ./scripts/install-user.sh
 ```
@@ -176,10 +226,11 @@ output:
 
 ## Diagnostics
 
-Check local prerequisites:
+Check local prerequisites (session type, paste backend, `/dev/uinput`, microphone):
 
 ```bash
 kde-dictation --check
+kde-dictation --list-devices   # microphones usable for audio.device
 ```
 
 Test only clipboard + ydotool insertion:
@@ -236,6 +287,7 @@ Current deterministic tests cover:
 - HTTP/WSS URL normalization;
 - automatic realtime -> batch fallback policy;
 - live-final reconciliation (exact/suffix/mismatch safety);
+- paste key mapping, ydotool socket discovery (including stale sockets), session detection and microphone selection;
 - source-tree architecture contract.
 
 ## Installation layout
@@ -258,6 +310,6 @@ User install defaults to:
 - The transcript is left in the clipboard after insertion.
 - The target is whichever control owns keyboard focus when paste occurs.
 - Only `ctrl+v` and `shift+insert` output shortcuts are currently supported.
+- The app targets KDE Plasma (KGlobalAccel + StatusNotifierItem); GNOME is out of scope.
 
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) and
-[`AI_FINISHING_PROMPT.md`](AI_FINISHING_PROMPT.md).
+See [`ARCHITECTURE.md`](ARCHITECTURE.md).

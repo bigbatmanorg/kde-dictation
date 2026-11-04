@@ -48,6 +48,12 @@ struct OutputConfig {
     QString pasteShortcut = QStringLiteral("ctrl+v");
     int pasteDelayMs = 80;
     int livePasteDelayMs = 40;
+    // Key-injection backend: auto | ydotool | xdotool.
+    QString backend = QStringLiteral("auto");
+    // Optional explicit ydotoold socket; empty means auto-discover.
+    QString ydotoolSocket;
+    // Start a private ydotoold when none is reachable.
+    bool ydotoolAutostart = true;
 };
 
 struct LoggingConfig {

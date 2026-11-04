@@ -13,7 +13,8 @@ ShortcutController (KGlobalAccel)
            v
 DictationController -----> TrayController (KStatusNotifierItem)
      |       |       |
-     |       |       +----> TextOutput -> clipboard -> ydotoold/uinput
+     |       |       +----> TextOutput -> clipboard -> PasteBackend
+     |       |                                  (ydotool | xdotool)
      |       |
      |       +------------> BatchOpenAIProvider
      |                      POST /v1/audio/transcriptions
@@ -131,7 +132,7 @@ Batch primary path:
 final UTF-8 transcript
   -> QClipboard
   -> short delay
-  -> ydotool sends paste shortcut only
+  -> PasteBackend sends paste shortcut only (ydotool or xdotool)
   -> currently focused control
 ```
 
@@ -150,8 +151,24 @@ never overtake an older paste. At stream completion the complete transcript is
 left in the clipboard. Do not type transcript characters with ydotool; ydotool
 only synthesizes the paste shortcut, avoiding layout and Unicode problems.
 
-If ydotool or ydotoold becomes unavailable, automatic live paste is disabled for
+If the paste backend becomes unavailable, automatic live paste is disabled for
 that stream and the assembled transcript remains available in the clipboard.
+
+## Paste backends
+
+`TextOutput` owns the clipboard and the serialized live-paste queue. Synthesizing
+the keystroke is delegated to a `PasteBackend` chosen by `output.backend`:
+
+- `YdotoolBackend`: locates a reachable ydotoold socket (`YdotoolSocket`: configured
+  path, `$YDOTOOL_SOCKET`, `$XDG_RUNTIME_DIR/.ydotool_socket`, the app-managed
+  socket, `/tmp/.ydotool_socket`) by actually connecting to it, so stale socket
+  files are ignored. If none is reachable it starts a private `ydotoold` bound to
+  `$XDG_RUNTIME_DIR/kde-dictation-ydotool.sock`, which removes the dependency on
+  distribution-specific systemd units (Fedora: system unit, Arch: user unit).
+- `XdotoolBackend`: X11 sessions only; no uinput permissions needed.
+
+`auto` picks xdotool on X11 when installed and ydotool otherwise. Key mapping,
+socket discovery and session detection are pure functions covered by unit tests.
 
 ## Focus semantics
 

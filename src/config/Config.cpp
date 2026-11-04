@@ -1,5 +1,7 @@
 #include "config/Config.h"
 
+#include "output/PasteKeys.h"
+
 #include <QFileInfo>
 #include <QProcessEnvironment>
 #include <QStandardPaths>
@@ -114,6 +116,9 @@ AppConfig ConfigLoader::load(const QString &path)
     cfg.output.pasteShortcut = qstr(output, "paste_shortcut", cfg.output.pasteShortcut);
     cfg.output.pasteDelayMs = qint(output, "paste_delay_ms", cfg.output.pasteDelayMs);
     cfg.output.livePasteDelayMs = qint(output, "live_paste_delay_ms", cfg.output.livePasteDelayMs);
+    cfg.output.backend = qstr(output, "backend", cfg.output.backend).trimmed().toLower();
+    cfg.output.ydotoolSocket = qstr(output, "ydotool_socket", cfg.output.ydotoolSocket);
+    cfg.output.ydotoolAutostart = qbool(output, "ydotool_autostart", cfg.output.ydotoolAutostart);
 
     const auto logging = root["logging"];
     cfg.logging.logTranscripts = qbool(logging, "log_transcripts", cfg.logging.logTranscripts);
@@ -139,9 +144,12 @@ void ConfigLoader::validate(const AppConfig &cfg)
     if (cfg.output.method != QStringLiteral("clipboard_paste")) {
         throw std::runtime_error("Only output.method=clipboard_paste is supported in v1");
     }
-    const auto paste = cfg.output.pasteShortcut.trimmed().toLower();
-    if (paste != QStringLiteral("ctrl+v") && paste != QStringLiteral("shift+insert")) {
+    if (!PasteKeys::isSupported(cfg.output.pasteShortcut)) {
         throw std::runtime_error("output.paste_shortcut must be ctrl+v or shift+insert");
+    }
+    if (cfg.output.backend != QStringLiteral("auto") && cfg.output.backend != QStringLiteral("ydotool")
+        && cfg.output.backend != QStringLiteral("xdotool")) {
+        throw std::runtime_error("output.backend must be auto, ydotool or xdotool");
     }
     if (cfg.output.pasteDelayMs < 0 || cfg.output.pasteDelayMs > 5000) {
         throw std::runtime_error("output.paste_delay_ms must be between 0 and 5000");

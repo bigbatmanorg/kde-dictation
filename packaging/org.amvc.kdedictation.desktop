@@ -1,9 +1,13 @@
 [Desktop Entry]
 Type=Application
 Name=KDE Dictation
+GenericName=Voice Dictation
 Comment=Global shortcut dictation for KDE Plasma
+Comment[cs]=Diktování hlasem pomocí globální klávesové zkratky
 Exec=kde-dictation
 Icon=audio-input-microphone
 Terminal=false
-Categories=AudioVideo;Audio;
+Categories=Qt;KDE;AudioVideo;Audio;
+Keywords=dictation;speech;voice;transcription;stt;whisper;
 StartupNotify=false
+X-DBUS-StartupType=Unique

@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: package (${{ matrix.label }})
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { label: fedora,       image: "fedora:latest",       generator: RPM }
+          - { label: ubuntu26.04,  image: "ubuntu:26.04",        generator: DEB }
+          - { label: ubuntu25.10,  image: "ubuntu:25.10",        generator: DEB }
+          - { label: debian13,     image: "debian:trixie",       generator: DEB }
+    steps:
+      - name: Install git
+        shell: sh
+        run: |
+          if command -v apt-get >/dev/null; then apt-get update && apt-get install -y git ca-certificates;
+          else dnf install -y git; fi
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          ./scripts/install-deps.sh
+          if [ "${{ matrix.generator }}" = RPM ]; then dnf install -y rpm-build; fi
+      - run: ./scripts/test.sh
+      - name: Build package
+        run: |
+          cmake -S . -B build-pkg -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build build-pkg
+          (cd build-pkg && cpack -G ${{ matrix.generator }})
+          mkdir -p dist
+          for f in build-pkg/kde-dictation*.deb build-pkg/kde-dictation*.rpm; do
+            [ -e "$f" ] || continue
+            base="$(basename "$f")"
+            case "$f" in
+              *.deb) out="${base%_*.deb}_${{ matrix.label }}_${base##*_}" ;;
+              *.rpm) out="${base%.rpm}.${{ matrix.label }}.rpm" ;;
+            esac
+            cp "$f" "dist/$out"
+          done
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg-${{ matrix.label }}
+          path: dist/*
+
+  release:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: pkg-*
+          merge-multiple: true
+      - name: Extract release notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '$0 ~ "^## "v"$" {p=1; next} /^## / {p=0} p' CHANGELOG.md > notes.md
+          cat notes.md
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --title "KDE Dictation ${GITHUB_REF_NAME#v}" --notes-file notes.md
+          fi

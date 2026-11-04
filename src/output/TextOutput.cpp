@@ -3,10 +3,8 @@
 #include <QClipboard>
 #include <QDBusInterface>
 #include <QDBusReply>
-#include <QFileInfo>
 #include <QGuiApplication>
-#include <QProcess>
-#include <QStandardPaths>
+#include <QDebug>
 #include <QTimer>
 #include <memory>
 
@@ -18,26 +16,40 @@ TextOutput::TextOutput(QObject *parent) : QObject(parent)
     connect(&streamFlushTimer_, &QTimer::timeout, this, &TextOutput::flushStream);
 }
 
-QString TextOutput::ydotoolExecutable()
+namespace {
+
+QString backendKeyOf(const OutputConfig &config)
 {
-    return QStandardPaths::findExecutable(QStringLiteral("ydotool"));
+    return config.backend + QLatin1Char('|') + config.ydotoolSocket + QLatin1Char('|')
+        + (config.ydotoolAutostart ? QLatin1Char('1') : QLatin1Char('0'));
 }
 
-QString TextOutput::ydotoolSocketPath()
-{
-    const QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");
-    if (runtime.isEmpty()) return {};
-    return runtime + QStringLiteral("/.ydotool_socket");
-}
+} // namespace
 
-QStringList TextOutput::ydotoolArgs(const QString &shortcut)
+PasteBackend *TextOutput::backendFor(const OutputConfig &config)
 {
-    const QString normalized = shortcut.trimmed().toLower();
-    if (normalized == QStringLiteral("shift+insert")) {
-        return {QStringLiteral("key"), QStringLiteral("42:1"), QStringLiteral("110:1"), QStringLiteral("110:0"), QStringLiteral("42:0")};
+    const QString key = backendKeyOf(config);
+    if (!backend_ || key != backendKey_) {
+        backend_ = PasteBackendFactory::create(config, this);
+        backendKey_ = key;
     }
-    // Linux input key codes: KEY_LEFTCTRL=29, KEY_V=47.
-    return {QStringLiteral("key"), QStringLiteral("29:1"), QStringLiteral("47:1"), QStringLiteral("47:0"), QStringLiteral("29:0")};
+    return backend_.get();
+}
+
+void TextOutput::warmUp(const OutputConfig &config)
+{
+    PasteBackend *backend = backendFor(config);
+    QString error;
+    if (!backend->prepare(&error)) {
+        qWarning().noquote() << "Paste backend" << backend->name() << "not ready:" << error;
+    } else {
+        qInfo().noquote() << "Paste backend:" << backend->name();
+    }
+}
+
+BackendStatus TextOutput::backendStatus(const OutputConfig &config)
+{
+    return PasteBackendFactory::create(config)->status();
 }
 
 bool TextOutput::synchronizeKdeClipboard(const QString &text)
@@ -58,20 +70,6 @@ void TextOutput::startPaste(const QString &text, const OutputConfig &config, int
 {
     QGuiApplication::clipboard()->setText(text, QClipboard::Clipboard);
 
-    const QString executable = ydotoolExecutable();
-    if (executable.isEmpty()) {
-        emit warning(QStringLiteral("ydotool not found; transcript remains in the clipboard"));
-        QTimer::singleShot(0, this, [callback = std::move(callback)]() mutable { callback(false); });
-        return;
-    }
-
-    const QString socket = ydotoolSocketPath();
-    if (socket.isEmpty() || !QFileInfo::exists(socket)) {
-        emit warning(QStringLiteral("ydotoold socket not found; transcript remains in the clipboard"));
-        QTimer::singleShot(0, this, [callback = std::move(callback)]() mutable { callback(false); });
-        return;
-    }
-
     auto callbackState = std::make_shared<PasteCallback>(std::move(callback));
     const auto complete = [callbackState](bool ok) {
         if (!*callbackState) return;
@@ -80,27 +78,15 @@ void TextOutput::startPaste(const QString &text, const OutputConfig &config, int
         cb(ok);
     };
 
-    const auto startProcess = [this, executable, config, complete]() mutable {
-        auto *process = new QProcess(this);
-        connect(process, &QProcess::finished, this,
-                [this, process, complete](int exitCode, QProcess::ExitStatus status) mutable {
-            const QString stderrText = QString::fromUtf8(process->readAllStandardError()).trimmed();
-            process->deleteLater();
-            const bool ok = status == QProcess::NormalExit && exitCode == 0;
+    PasteBackend *backend = backendFor(config);
+    const auto startProcess = [this, backend, config, complete]() mutable {
+        backend->sendPaste(config.pasteShortcut, [this, complete](bool ok, const QString &error) mutable {
             if (!ok) {
-                emit warning(QStringLiteral("ydotool paste failed; transcript remains in clipboard%1")
-                                 .arg(stderrText.isEmpty() ? QString() : QStringLiteral(": %1").arg(stderrText)));
+                emit warning(QStringLiteral("Automatic paste failed; transcript remains in the clipboard%1")
+                                 .arg(error.isEmpty() ? QString() : QStringLiteral(": %1").arg(error)));
             }
             complete(ok);
         });
-        process->start(executable, ydotoolArgs(config.pasteShortcut));
-        if (!process->waitForStarted(500)) {
-            const QString reason = process->errorString();
-            QObject::disconnect(process, nullptr, this, nullptr);
-            process->deleteLater();
-            emit warning(QStringLiteral("Could not start ydotool; transcript remains in clipboard: %1").arg(reason));
-            complete(false);
-        }
     };
 
     QTimer::singleShot(qMax(0, delayMs), this, [this, text, startProcess = std::move(startProcess)]() mutable {

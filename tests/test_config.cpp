@@ -53,6 +53,39 @@ output:
         qunsetenv("TEST_KDICT_KEY");
     }
 
+    void outputBackendDefaultsAndOverrides()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("config.yaml"));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("transcription:\n  base_url: https://example.test\n");
+        f.close();
+        auto cfg = ConfigLoader::load(path);
+        QCOMPARE(cfg.output.backend, QStringLiteral("auto"));
+        QVERIFY(cfg.output.ydotoolAutostart);
+        QVERIFY(cfg.output.ydotoolSocket.isEmpty());
+
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("transcription:\n  base_url: https://example.test\noutput:\n  backend: XDOTOOL\n  ydotool_socket: /tmp/x.sock\n  ydotool_autostart: false\n");
+        f.close();
+        cfg = ConfigLoader::load(path);
+        QCOMPARE(cfg.output.backend, QStringLiteral("xdotool"));
+        QCOMPARE(cfg.output.ydotoolSocket, QStringLiteral("/tmp/x.sock"));
+        QVERIFY(!cfg.output.ydotoolAutostart);
+    }
+
+    void rejectsUnknownBackend()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("config.yaml"));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("transcription:\n  base_url: https://example.test\noutput:\n  backend: wtype\n");
+        f.close();
+        QVERIFY_EXCEPTION_THROWN(ConfigLoader::load(path), std::runtime_error);
+    }
+
     void rejectsBadPasteShortcut()
     {
         QTemporaryDir dir;

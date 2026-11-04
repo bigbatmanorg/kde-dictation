@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Fedora,             image: "fedora:latest" }
+          - { name: Ubuntu 26.04,       image: "ubuntu:26.04" }
+          - { name: Ubuntu 25.10,       image: "ubuntu:25.10" }
+          - { name: Debian 13,          image: "debian:trixie" }
+          - { name: Arch Linux,         image: "archlinux:latest" }
+          - { name: openSUSE Tumbleweed, image: "opensuse/tumbleweed:latest" }
+    steps:
+      - name: Install git (needed by checkout in minimal images)
+        shell: sh
+        run: |
+          if command -v apt-get >/dev/null; then apt-get update && apt-get install -y git ca-certificates;
+          elif command -v dnf >/dev/null; then dnf install -y git;
+          elif command -v pacman >/dev/null; then pacman -Sy --noconfirm git;
+          elif command -v zypper >/dev/null; then zypper --non-interactive install git tar gzip; fi
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: ./scripts/install-deps.sh
+      - name: Build and test
+        run: ./scripts/test.sh
+      - name: Smoke test binary without a display
+        run: |
+          ./build/kde-dictation --version
+          ./build/kde-dictation --help

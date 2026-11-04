@@ -16,7 +16,9 @@ required = [
     "src/shortcut/ShortcutController.cpp",
     "scripts/build.sh",
     "scripts/test.sh",
-    "scripts/setup-kubuntu.sh",
+    "scripts/setup.sh",
+    "scripts/install-deps.sh",
+    "scripts/lib/distro.sh",
 ]
 missing = [p for p in required if not (root / p).exists()]
 assert not missing, f"missing required files: {missing}"
@@ -31,15 +33,20 @@ assert "LiveTranscriptReconciler::reconcile" in controller
 
 output = (root / "src/output/TextOutput.cpp").read_text()
 assert "QGuiApplication::clipboard()->setText" in output
-assert 'QStringLiteral("29:1")' in output and 'QStringLiteral("47:1")' in output
+keys = (root / "src/output/PasteKeys.cpp").read_text()
+assert 'QStringLiteral("29:1")' in keys and 'QStringLiteral("47:1")' in keys
 assert "beginStream" in output and "appendStream" in output and "finishStream" in output
 
 shortcut = (root / "src/shortcut/ShortcutController.cpp").read_text()
 assert "globalShortcutActiveChanged" in shortcut
 
-setup = (root / "scripts/setup-kubuntu.sh").read_text()
-assert "install-deps-kubuntu.sh" in setup
+setup = (root / "scripts/setup.sh").read_text()
+assert "install-deps.sh" in setup
 assert "setup-uinput.sh" in setup
 assert "install-user.sh" in setup
+
+deps = (root / "scripts/install-deps.sh").read_text()
+for manager in ("apt-get", "dnf", "pacman", "zypper"):
+    assert manager in deps, f"install-deps.sh does not support {manager}"
 
 print("repo contract: OK")

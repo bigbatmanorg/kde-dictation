@@ -74,6 +74,8 @@ bool DictationController::loadConfig(QString *errorMessage)
         }
         config_ = loaded;
         shortcut_->setMode(config_.activationMode);
+        audio_->setDeviceName(config_.audio.device);
+        output_->warmUp(config_.output);
         tray_->showIdle();
         qInfo().noquote() << "Loaded config" << configPath_
                           << "activation=" << toString(config_.activationMode)

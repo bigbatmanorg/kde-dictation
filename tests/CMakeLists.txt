@@ -12,3 +12,6 @@ kdict_add_test(test_fallback test_fallback.cpp)
 kdict_add_test(test_url test_url.cpp)
 
 kdict_add_test(test_live_reconciliation test_live_reconciliation.cpp)
+kdict_add_test(test_paste_keys test_paste_keys.cpp)
+kdict_add_test(test_ydotool_socket test_ydotool_socket.cpp)
+kdict_add_test(test_session_audio test_session_audio.cpp)
