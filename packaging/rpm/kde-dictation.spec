@@ -1,5 +1,5 @@
 Name:           kde-dictation
-Version:        0.3.0
+Version:        0.3.1
 Release:        1%{?dist}
 Summary:        Global shortcut dictation client for KDE Plasma
 License:        MIT
@@ -62,5 +62,5 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/org.amvc.
 %{_datadir}/%{name}/
 
 %changelog
-* Wed Nov 04 2026 Adam Moravcik <moravcik.adam@gmail.com> - 0.3.0-1
+* Wed Nov 04 2026 Adam Moravcik <moravcik.adam@gmail.com> - 0.3.1-1
 - Multi-distribution support: pluggable paste backend, ydotool socket discovery

@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: |
           ./scripts/install-deps.sh
-          if [ "${{ matrix.generator }}" = RPM ]; then dnf install -y rpm-build; fi
+          if [ "${{ matrix.generator }}" = RPM ]; then dnf install -y rpm-build file; else apt-get install -y file dpkg-dev; fi
       - run: ./scripts/test.sh
       - name: Build package
         run: |

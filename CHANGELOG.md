@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.3.0
+## 0.3.1
 
-Multi-distribution support (verified on Fedora KDE, Kubuntu/Ubuntu, Debian, Arch and openSUSE).
+First release with multi-distribution support (a `v0.3.0` tag exists but its release pipeline failed and published nothing).
+Verified on Fedora KDE, Kubuntu/Ubuntu, Debian, Arch and openSUSE.
 
 - Fix Fedora (and other distros without a user `ydotool.service`): the app no longer
   assumes `$XDG_RUNTIME_DIR/.ydotool_socket`. ydotoold sockets are discovered

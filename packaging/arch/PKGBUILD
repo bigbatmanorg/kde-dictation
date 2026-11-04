@@ -1,6 +1,6 @@
 # Maintainer: Adam Moravcik <moravcik.adam@gmail.com>
 pkgname=kde-dictation
-pkgver=0.3.0
+pkgver=0.3.1
 pkgrel=1
 pkgdesc='Global shortcut dictation client for KDE Plasma (OpenAI-compatible batch/realtime STT)'
 arch=('x86_64' 'aarch64')
