@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Set KDICT_ZYPPER_INSTALL_ARGS=--force-resolution to let zypper resolve
+# package conflicts (CI containers) instead of aborting.
 # Install build and runtime dependencies on Debian/Ubuntu (Kubuntu), Fedora,
 # Arch/Manjaro and openSUSE. Usage: install-deps.sh [--build-only]
 set -euo pipefail
@@ -35,7 +37,7 @@ case "$FAMILY" in
       python
     ;;
   suse)
-    as_root zypper --non-interactive install \
+    as_root zypper --non-interactive install ${KDICT_ZYPPER_INSTALL_ARGS:-} \
       gcc-c++ cmake ninja pkgconf-pkg-config \
       qt6-base-devel qt6-multimedia-devel qt6-websockets-devel \
       kf6-kglobalaccel-devel kf6-kstatusnotifieritem-devel yaml-cpp-devel \
@@ -61,7 +63,7 @@ install_optional() {
     debian) as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "$pkg" ;;
     fedora) as_root dnf install -y "$pkg" ;;
     arch)   as_root pacman -S --needed --noconfirm "$pkg" ;;
-    suse)   as_root zypper --non-interactive install "$pkg" ;;
+    suse)   as_root zypper --non-interactive install ${KDICT_ZYPPER_INSTALL_ARGS:-} "$pkg" ;;
   esac
 }
 for pkg in ydotool xdotool; do

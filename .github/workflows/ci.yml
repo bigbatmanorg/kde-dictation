@@ -30,6 +30,8 @@ jobs:
           elif command -v zypper >/dev/null; then zypper --non-interactive install git tar gzip; fi
       - uses: actions/checkout@v4
       - name: Install dependencies
+        env:
+          KDICT_ZYPPER_INSTALL_ARGS: --force-resolution
         run: ./scripts/install-deps.sh
       - name: Build and test
         run: ./scripts/test.sh
